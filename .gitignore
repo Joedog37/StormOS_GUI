@@ -1,0 +1,24 @@
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Local application data and private project history
+backups/
+users/
+store/
+.env
+
+# Build output
+build/
+dist/
+*.exe
+
+# IDE and assistant workspace files
+.idea/
+.refact/
+
+# Operating-system files
+.DS_Store
+Thumbs.db

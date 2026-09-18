@@ -21,69 +21,98 @@ much later project involving a kernel, drivers, and low-level languages.
 
 ## Security baseline
 
-- [ ] Keep StormOS data separate from its program files.
-- [ ] Never store passwords as plain text.
-- [ ] Use a unique random salt and a slow password hash for every account.
-- [ ] Use safe comparisons for password checks.
-- [ ] Validate all filenames, usernames, and app-package contents.
-- [ ] Do not run downloaded or installed app code automatically.
+- [x] Keep StormOS data separate from its program files.
+- [x] Never store passwords as plain text.
+- [x] Use a unique random salt and a slow password hash for every account.
+- [x] Use safe comparisons for password checks.
+- [x] Validate all filenames, usernames, and app-package contents.
+- [x] Do not run downloaded or installed app code automatically.
 - [ ] Keep security-sensitive actions behind clear account permissions.
-- [ ] Add tests for login, data handling, and app-install security.
+- [x] Add tests for login, data handling, and app-install security.
 - [ ] Review security again before creating a public `.exe` release.
 
 ## Phase 0 - Visual design
 
-- [ ] Follow the Thunderhead Pictures design brief in `DESIGN.md`.
-- [ ] Choose the final wallpaper and logo treatment.
-- [ ] Design the boot, login, desktop, taskbar, and Start menu before coding.
-- [ ] Keep the interface original; do not copy Windows, Linux, or macOS.
+- [x] Follow the Thunderhead Pictures design brief in `DESIGN.md`.
+- [x] Choose the final wallpaper and logo treatment.
+- [x] Design the boot, login, desktop, taskbar, and Start menu before coding.
+- [x] Keep the interface original; do not copy Windows, Linux, or macOS.
 
 ## Phase 1 - Clean foundation
 
-- [ ] Create the new project folders.
-- [ ] Add `requirements.txt`.
-- [ ] Create one program entry file.
-- [ ] Open a simple fullscreen StormOS window.
-- [ ] Verify the program starts from PyCharm.
+- [x] Create the new project folders.
+- [x] Add `requirements.txt`.
+- [x] Create one program entry file.
+- [x] Open a simple fullscreen StormOS window.
+- [x] Verify the program starts from PyCharm.
 
 ## Phase 2 - First user experience
 
-- [ ] Create a boot screen using the StormOS logo.
-- [ ] Create a login screen.
-- [ ] Create a temporary local test account.
-- [ ] Move from login to the desktop.
+- [x] Create a boot screen using the StormOS logo.
+- [x] Create a login screen.
+- [x] Create user registration / sign-up account creation dialog.
+- [x] Create a temporary local test account.
+- [x] Move from login to the desktop.
 
 ## Phase 3 - Desktop
 
-- [ ] Show the wallpaper.
-- [ ] Add a taskbar and clock.
-- [ ] Add a Start button.
-- [ ] Add a basic Start menu.
-- [ ] Add a safe Exit StormOS option.
+- [x] Show the wallpaper.
+- [x] Add a taskbar and clock.
+- [x] Add a Start button.
+- [x] Add a basic Start menu.
+- [x] Add a safe Exit StormOS option.
 
 ## Phase 4 - Apps
 
-- [ ] Create an app system with app names and icons.
-- [ ] Build one simple built-in app, such as Notes.
-- [ ] Add an app window with minimize, maximize, and close buttons.
-- [ ] Add a file or settings app later.
+- [x] Create an app system with app names and icons.
+- [x] Build one simple built-in app, such as Notes.
+- [x] Add an app window with minimize, maximize, and close buttons.
+- [x] Add a file or settings app later.
+- [x] Add versatile Storm Power Calculator (natural math expression engine, live tape, unit & base converters).
+- [x] Add secure App Store & Package Manager with `.stormapp` package installation.
 
 ## Phase 5 - Accounts and settings
 
-- [ ] Save accounts safely on the computer.
-- [ ] Use hashed passwords.
-- [ ] Add wallpaper and theme settings.
-- [ ] Add logout and restart-the-app actions.
+- [x] Save accounts safely on the computer.
+- [x] Use hashed passwords with unique salts (PBKDF2-HMAC-SHA256).
+- [x] Add wallpaper presets, procedural backgrounds, and custom image file picker.
+- [x] Add multi-monitor display detection and custom resolution settings.
+- [x] Add system-wide interactive mouse cursors and crisp icons.
+- [x] Upgrade Notes into a multi-tab Notepad++ style Code Studio (syntax highlighting, line numbers, auto-indent, find/replace, code execution).
+- [x] Add logout, lock, and restart-the-app actions.
 
 ## Phase 6 - Packaging
 
-- [ ] Test the completed project.
-- [ ] Package it as a Windows `.exe`.
-- [ ] Test the `.exe` on a computer without Python installed.
+- [x] Test the completed project.
+- [x] Package it as a standalone Windows `.exe` (`dist/StormOS/StormOS.exe`) with PyInstaller.
+- [x] Add automated build script (`scripts/build_exe.py`) and PyInstaller spec (`StormOS.spec`).
+- [x] Generate official multi-resolution Windows icon (`assets/stormos.ico`).
+- [x] Ensure persistent user data and sandboxes are preserved across runs.
 
-## Later ideas
+## Phase 7 - User Management & Account Administration
 
-- Linux and macOS versions.
-- App store and installable apps.
-- Multiple desktops and better window management.
-- Research a separate real bootable-OS project.
+- [ ] Edit existing user accounts (change password, update display name, delete account).
+- [ ] User profile avatars and custom profile pictures.
+- [ ] Role-based permissions (Administrator vs. Standard User).
+- [ ] User data export, backup, and restore tools.
+
+## Phase 8 - Audio System & Atmospheric Immersion
+
+- [ ] Startup sound playback toggle and audio settings.
+- [ ] Ambient background audio (rain, thunderstorm, low hum).
+- [ ] UI sound effects (button clicks, window maximize/minimize, error chime).
+- [ ] Audio volume mixer app.
+
+## Phase 9 - Advanced Windowing & Multitasking
+
+- [ ] Window snap grid (left/right split, 4-corner snap).
+- [ ] Virtual workspaces / multiple desktop surfaces.
+- [ ] Alt+Tab task switcher overlay.
+- [ ] Minimap / overview mode of all running applications.
+
+## Phase 10 - Distribution & Cross-Platform
+
+- [ ] Standalone installer wizard (Inno Setup / NSIS) for one-click setup.
+- [ ] Portable zip package distribution.
+- [ ] Linux and macOS compatibility layers.
+- [ ] Research a separate real bootable-OS project.
