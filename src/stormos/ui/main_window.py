@@ -19,6 +19,7 @@ from stormos.core.paths import get_asset_path
 from stormos.desktop.desktop_view import DesktopView
 from stormos.screens.boot_screen import BootScreen
 from stormos.screens.login_screen import LoginScreen
+from stormos.services.audio_manager import AudioManager
 from stormos.services.user_manager import UserManager, UserProfile
 from stormos.ui.theme import get_base_stylesheet
 
@@ -38,6 +39,9 @@ class StormMainWindow(QMainWindow):
 
         self.user_manager = UserManager()
         self.user_manager.ensure_default_account()
+
+        # Initialize audio manager
+        self.audio_manager = AudioManager.get_instance()
 
         self._setup_screens(skip_boot=skip_boot)
         self._setup_shortcuts()
@@ -88,15 +92,54 @@ class StormMainWindow(QMainWindow):
         shortcut_esc = QShortcut(QKeySequence("Esc"), self)
         shortcut_esc.activated.connect(self._on_esc_pressed)
 
+        # Phase 9: Alt+Tab task switcher
+        shortcut_alt_tab = QShortcut(QKeySequence("Alt+Tab"), self)
+        shortcut_alt_tab.activated.connect(self._show_task_switcher)
+
+        # Phase 9: Ctrl+Esc for overview mode
+        shortcut_overview = QShortcut(QKeySequence("Ctrl+Esc"), self)
+        shortcut_overview.activated.connect(self._show_overview)
+
+        # Phase 9: Ctrl+Alt+Left/Right for workspace switching
+        shortcut_ws_left = QShortcut(QKeySequence("Ctrl+Alt+Left"), self)
+        shortcut_ws_left.activated.connect(self._previous_workspace)
+
+        shortcut_ws_right = QShortcut(QKeySequence("Ctrl+Alt+Right"), self)
+        shortcut_ws_right.activated.connect(self._next_workspace)
+
+    def _show_task_switcher(self):
+        """Show the Alt+Tab task switcher."""
+        if self.stack.currentWidget() == self.desktop_view:
+            self.desktop_view.show_task_switcher()
+
+    def _show_overview(self):
+        """Show the overview mode."""
+        if self.stack.currentWidget() == self.desktop_view:
+            self.desktop_view.show_overview()
+
+    def _next_workspace(self):
+        """Switch to the next workspace."""
+        if self.stack.currentWidget() == self.desktop_view:
+            self.desktop_view.next_workspace()
+
+    def _previous_workspace(self):
+        """Switch to the previous workspace."""
+        if self.stack.currentWidget() == self.desktop_view:
+            self.desktop_view.previous_workspace()
+
     def _on_boot_finished(self):
-        """Transition from Boot Screen to Login Screen."""
+        """Transition from Boot Screen to Login Screen and play startup sound."""
         self.login_screen.refresh_users()
         self.stack.setCurrentWidget(self.login_screen)
+        # Play startup sound after boot completes
+        self.audio_manager.play_startup_sound()
 
     def _on_login_successful(self, profile: UserProfile):
         """Transition from Login Screen to Desktop Workspace."""
         self.desktop_view.set_user(profile)
         self.stack.setCurrentWidget(self.desktop_view)
+        # Play UI sound for successful login
+        self.audio_manager.play_ui_sound("click")
 
     def _on_logout(self):
         """Return to Login Screen from Desktop."""

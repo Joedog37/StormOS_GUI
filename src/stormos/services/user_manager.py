@@ -1,11 +1,18 @@
-"""User profile and account management service for StormOS."""
+"""User profile and account management service for StormOS.
+
+Handles account CRUD, authentication, role-based permissions,
+data export/backup, and avatar management.
+"""
 
 import json
 import logging
+import shutil
+import tarfile
+import zipfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from stormos.core.paths import USERS_DIR
 from stormos.core.security import (
@@ -150,6 +157,177 @@ class UserManager:
         except Exception as e:
             logger.error("Failed to update user profile for %s: %s", profile.username, e)
             return False
+
+    # ---- Phase 7: Account Administration ----
+
+    def change_password(self, username: str, old_password: str, new_password: str) -> bool:
+        """Change a user's password after verifying the old one.
+
+        Returns True on success, False if old password is wrong or new password is empty.
+        """
+        if not new_password:
+            logger.error("New password cannot be empty")
+            return False
+
+        profile = self.get_user(username)
+        if not profile:
+            logger.error("User not found for password change: %s", username)
+            return False
+
+        if not verify_password(old_password, profile.password_hash, profile.salt):
+            logger.warning("Old password verification failed for %s", username)
+            return False
+
+        pw_hash, salt = hash_password(new_password)
+        profile.password_hash = pw_hash
+        profile.salt = salt
+        return self.update_user(profile)
+
+    def update_display_name(self, username: str, display_name: str) -> bool:
+        """Update the display name for an existing user."""
+        if not display_name or not display_name.strip():
+            logger.error("Display name cannot be empty")
+            return False
+
+        profile = self.get_user(username)
+        if not profile:
+            return False
+
+        profile.display_name = display_name.strip()
+        return self.update_user(profile)
+
+    def update_role(self, username: str, new_role: str, requesting_user: Optional[UserProfile] = None) -> bool:
+        """Update a user's role (admin/user).
+
+        Only administrators can change roles. An admin cannot demote themselves
+        if they are the last admin.
+        """
+        if new_role not in ("admin", "user"):
+            logger.error("Invalid role: %s", new_role)
+            return False
+
+        # Permission check — only admins can change roles
+        if requesting_user and requesting_user.role != "admin":
+            logger.warning("Non-admin user %s attempted to change role", requesting_user.username)
+            return False
+
+        profile = self.get_user(username)
+        if not profile:
+            return False
+
+        # Prevent removing the last admin
+        if new_role == "user" and profile.role == "admin":
+            admins = [u for u in self.list_users() if u.role == "admin"]
+            if len(admins) <= 1:
+                logger.warning("Cannot demote last admin: %s", username)
+                return False
+
+        profile.role = new_role
+        return self.update_user(profile)
+
+    def update_avatar(self, username: str, avatar: str) -> bool:
+        """Update a user's avatar reference (filename or path)."""
+        profile = self.get_user(username)
+        if not profile:
+            return False
+
+        profile.avatar = avatar
+        return self.update_user(profile)
+
+    def delete_user(self, username: str, requesting_user: Optional[UserProfile] = None) -> bool:
+        """Delete a user account and all associated data.
+
+        Only admins can delete users. A user cannot delete themselves if they
+        are the last admin.
+        """
+        profile = self.get_user(username)
+        if not profile:
+            return False
+
+        # Permission check
+        if requesting_user and requesting_user.role != "admin" and requesting_user.username != username:
+            logger.warning("Non-admin %s attempted to delete %s", requesting_user.username, username)
+            return False
+
+        # Prevent deleting the last admin
+        if profile.role == "admin":
+            admins = [u for u in self.list_users() if u.role == "admin"]
+            if len(admins) <= 1:
+                logger.warning("Cannot delete last admin: %s", username)
+                return False
+
+        user_dir = self._get_user_folder(username)
+        try:
+            if user_dir.exists():
+                shutil.rmtree(user_dir)
+            logger.info("Deleted user account: %s", username)
+            return True
+        except Exception as e:
+            logger.error("Failed to delete user %s: %s", username, e)
+            return False
+
+    def export_user_data(self, username: str, dest_dir: Optional[Path] = None) -> Optional[Path]:
+        """Export a user's data folder as a ZIP archive for backup.
+
+        Returns the path to the created archive, or None on failure.
+        """
+        profile = self.get_user(username)
+        if not profile:
+            return None
+
+        user_dir = self._get_user_folder(username)
+        if not user_dir.exists():
+            return None
+
+        if dest_dir is None:
+            dest_dir = self.users_dir.parent / "backups"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archive_name = f"{username}_export_{timestamp}.zip"
+        archive_path = dest_dir / archive_name
+
+        try:
+            with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for file_path in user_dir.rglob("*"):
+                    if file_path.is_file():
+                        arcname = file_path.relative_to(self.users_dir.parent)
+                        zf.write(file_path, arcname)
+            logger.info("Exported user data for %s to %s", username, archive_path)
+            return archive_path
+        except Exception as e:
+            logger.error("Failed to export user data for %s: %s", username, e)
+            return None
+
+    def import_user_data(self, archive_path: Path) -> bool:
+        """Restore a user's data from a ZIP export archive.
+
+        Returns True on success, False on failure.
+        """
+        if not archive_path.exists():
+            logger.error("Archive not found: %s", archive_path)
+            return False
+
+        try:
+            with zipfile.ZipFile(archive_path, "r") as zf:
+                zf.extractall(self.users_dir.parent)
+            logger.info("Imported user data from %s", archive_path)
+            return True
+        except Exception as e:
+            logger.error("Failed to import user data from %s: %s", archive_path, e)
+            return False
+
+    def check_permission(self, user: UserProfile, action: str) -> bool:
+        """Check if a user has permission to perform a given action.
+
+        Actions requiring admin role:
+        - delete_user, change_role, manage_accounts, system_settings
+        All other actions are allowed for any authenticated user.
+        """
+        admin_actions = {"delete_user", "change_role", "manage_accounts", "system_settings"}
+        if action in admin_actions and user.role != "admin":
+            return False
+        return True
 
     def ensure_default_account(self) -> UserProfile:
         """Ensure at least one local administrator/operator account exists for testing."""

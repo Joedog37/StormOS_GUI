@@ -2,8 +2,10 @@
 
 Provides draggable, resizable, custom storm-glass window containers
 with minimize, maximize, restore, and close controls.
+Includes window snap-to-grid functionality for multitasking.
 """
 
+import logging
 from typing import Optional
 from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QCursor, QFont, QMouseEvent, QPainter, QPaintEvent
@@ -16,6 +18,21 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+logger = logging.getLogger(__name__)
+
+# Snap zone threshold in pixels - how close to edge/corner to trigger snap
+SNAP_THRESHOLD = 5
+
+# Snap region identifiers
+SNAP_NONE = "none"
+SNAP_LEFT = "left"
+SNAP_RIGHT = "right"
+SNAP_TOP_LEFT = "top_left"
+SNAP_TOP_RIGHT = "top_right"
+SNAP_BOTTOM_LEFT = "bottom_left"
+SNAP_BOTTOM_RIGHT = "bottom_right"
+SNAP_TOP = "top"  # Full-width maximize
 
 from stormos.core.constants import (
     COLOR_ERROR,
@@ -100,7 +117,7 @@ class WindowTitleBar(QFrame):
         self.min_btn.setToolTip("Minimize")
         self.min_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.min_btn.setStyleSheet(btn_style_common)
-        self.min_btn.clicked.connect(self.minimize_clicked.emit)
+        self.min_btn.clicked.connect(self._on_minimize)
         layout.addWidget(self.min_btn)
 
         self.max_btn = QPushButton("□")
@@ -108,7 +125,7 @@ class WindowTitleBar(QFrame):
         self.max_btn.setToolTip("Maximize / Restore")
         self.max_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.max_btn.setStyleSheet(btn_style_common)
-        self.max_btn.clicked.connect(self.maximize_clicked.emit)
+        self.max_btn.clicked.connect(self._on_maximize)
         layout.addWidget(self.max_btn)
 
         self.close_btn = QPushButton("✕")
@@ -132,8 +149,37 @@ class WindowTitleBar(QFrame):
             }}
             """
         )
-        self.close_btn.clicked.connect(self.close_clicked.emit)
+        self.close_btn.clicked.connect(self._on_close)
         layout.addWidget(self.close_btn)
+
+    # ---- UI Sound Effect Handlers ----
+
+    def _on_minimize(self):
+        """Play minimize sound and emit signal."""
+        try:
+            from stormos.services.audio_manager import AudioManager
+            AudioManager.get_instance().play_ui_sound("minimize")
+        except Exception:
+            pass
+        self.minimize_clicked.emit()
+
+    def _on_maximize(self):
+        """Play maximize sound and emit signal."""
+        try:
+            from stormos.services.audio_manager import AudioManager
+            AudioManager.get_instance().play_ui_sound("maximize")
+        except Exception:
+            pass
+        self.maximize_clicked.emit()
+
+    def _on_close(self):
+        """Play close sound and emit signal."""
+        try:
+            from stormos.services.audio_manager import AudioManager
+            AudioManager.get_instance().play_ui_sound("close")
+        except Exception:
+            pass
+        self.close_clicked.emit()
 
     def set_title(self, title: str):
         self._title = title
@@ -154,13 +200,18 @@ class WindowTitleBar(QFrame):
 
 
 class StormWindow(QFrame):
-    """A floating, draggable, resizable application window in StormOS."""
+    """A floating, draggable, resizable application window in StormOS.
+
+    Supports snap-to-grid: dragging to edges/corners snaps the window
+    to half-screen or quarter-screen regions.
+    """
 
     closed = Signal(object)      # Emits self
     minimized = Signal(object)   # Emits self
     maximized = Signal(object)   # Emits self
     restored = Signal(object)    # Emits self
     focused = Signal(object)     # Emits self
+    snapped = Signal(object, str)  # Emits self, snap_region
 
     RESIZE_BORDER_SIZE = 8
 
@@ -186,6 +237,10 @@ class StormWindow(QFrame):
         self._resize_drag: Optional[str] = None
         self._resize_start_geom: Optional[QRect] = None
         self._resize_start_pos: Optional[QPoint] = None
+
+        # Snap tracking
+        self._current_snap_zone: str = SNAP_NONE
+        self._snap_preview_visible = False
 
         self.setMouseTracking(True)
         self._setup_ui()
@@ -347,8 +402,12 @@ class StormWindow(QFrame):
                 new_x = max(-self.width() + 80, min(new_pos.x(), max_x))
                 new_y = max(0, min(new_pos.y(), max_y))
                 self.move(new_x, new_y)
+
+                # Detect snap zone during drag
+                self._current_snap_zone = self._detect_snap_zone(new_x, new_y, self.width(), self.height())
             else:
                 self.move(new_pos)
+                self._current_snap_zone = SNAP_NONE
             event.accept()
             return
 
@@ -380,11 +439,103 @@ class StormWindow(QFrame):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
+        # Apply snap if dragging ended in a snap zone
+        if self._drag_pos is not None and self._current_snap_zone != SNAP_NONE and not self._is_maximized:
+            self._apply_snap(self._current_snap_zone)
+            self._current_snap_zone = SNAP_NONE
+
         self._drag_pos = None
         self._resize_drag = None
         self._resize_start_geom = None
         self._resize_start_pos = None
         super().mouseReleaseEvent(event)
+
+    # ---- Snap-to-Grid ----
+
+    def _detect_snap_zone(self, x: int, y: int, w: int, h: int) -> str:
+        """Detect which snap zone the window is in based on its position.
+
+        Returns the snap region identifier.
+        """
+        parent = self.parentWidget()
+        if not parent:
+            return SNAP_NONE
+
+        pw = parent.width()
+        ph = parent.height()
+        threshold = SNAP_THRESHOLD
+
+        # Corner zones (checked first for priority)
+        # Top-left corner
+        if x <= threshold and y <= threshold:
+            return SNAP_TOP_LEFT
+        # Top-right corner
+        if x + w >= pw - threshold and y <= threshold:
+            return SNAP_TOP_RIGHT
+        # Bottom-left corner
+        if x <= threshold and y + h >= ph - threshold:
+            return SNAP_BOTTOM_LEFT
+        # Bottom-right corner
+        if x + w >= pw - threshold and y + h >= ph - threshold:
+            return SNAP_BOTTOM_RIGHT
+
+        # Edge zones
+        # Left edge
+        if x <= threshold:
+            return SNAP_LEFT
+        # Right edge
+        if x + w >= pw - threshold:
+            return SNAP_RIGHT
+        # Top edge (maximize)
+        if y <= threshold:
+            return SNAP_TOP
+
+        return SNAP_NONE
+
+    def _apply_snap(self, zone: str) -> None:
+        """Apply snap geometry for the given zone."""
+        parent = self.parentWidget()
+        if not parent:
+            return
+
+        pw = parent.width()
+        ph = parent.height()
+        # Leave space for dock at bottom
+        dock_height = 64
+        usable_h = ph - dock_height
+
+        # Save current geometry as pre-snap state for restore
+        self._normal_geometry = self.geometry()
+
+        if zone == SNAP_LEFT:
+            # Left half
+            new_geom = QRect(0, 0, pw // 2, usable_h)
+        elif zone == SNAP_RIGHT:
+            # Right half
+            new_geom = QRect(pw // 2, 0, pw - pw // 2, usable_h)
+        elif zone == SNAP_TOP_LEFT:
+            # Top-left quarter
+            new_geom = QRect(0, 0, pw // 2, usable_h // 2)
+        elif zone == SNAP_TOP_RIGHT:
+            # Top-right quarter
+            new_geom = QRect(pw // 2, 0, pw - pw // 2, usable_h // 2)
+        elif zone == SNAP_BOTTOM_LEFT:
+            # Bottom-left quarter
+            new_geom = QRect(0, usable_h // 2, pw // 2, usable_h - usable_h // 2)
+        elif zone == SNAP_BOTTOM_RIGHT:
+            # Bottom-right quarter
+            new_geom = QRect(pw // 2, usable_h // 2, pw - pw // 2, usable_h - usable_h // 2)
+        elif zone == SNAP_TOP:
+            # Maximize (full width)
+            self._is_maximized = True
+            self.title_bar.set_maximized_state(True)
+            new_geom = QRect(0, 0, pw, usable_h)
+        else:
+            return
+
+        self.setGeometry(new_geom)
+        self.snapped.emit(self, zone)
+        logger.debug("Window %s snapped to %s: %s", self.app_id, zone, new_geom)
 
     def _get_resize_direction(self, pos: QPoint) -> Optional[str]:
         """Detect if cursor is on window resize borders."""

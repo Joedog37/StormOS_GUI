@@ -33,10 +33,13 @@ from stormos.core.constants import (
 )
 from stormos.core.paths import get_asset_path
 from stormos.desktop.command_center import CommandCenter
+from stormos.desktop.overview_mode import OverviewMode
 from stormos.desktop.safe_exit_dialog import SafeExitDialog
 from stormos.desktop.storm_dock import StormDock
+from stormos.desktop.task_switcher import AltTabSwitcher
 from stormos.desktop.window import StormWindow
 from stormos.services.user_manager import UserManager, UserProfile
+from stormos.services.workspace_manager import WorkspaceManager
 from stormos.ui.wallpaper_manager import WallpaperManager
 
 
@@ -119,6 +122,7 @@ class DesktopView(QWidget):
     exit_requested = Signal()
     app_launch_requested = Signal(str)  # Emits app_id
     display_mode_changed = Signal(dict)  # Emits display configuration dictionary
+    workspace_switch_requested = Signal(int)  # Emits workspace index
 
     def __init__(self, current_user: UserProfile | None = None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -127,8 +131,71 @@ class DesktopView(QWidget):
         self.open_windows: dict[str, StormWindow] = {}
         self._load_wallpaper()
 
+        # Phase 9: Workspace manager
+        self.workspace_manager = WorkspaceManager.get_instance()
+        self.workspace_manager.workspace_changed.connect(self._on_workspace_changed)
+
         # Build UI layout & components
         self._setup_ui()
+
+        # Phase 9: Task switcher and overview mode
+        self.task_switcher = AltTabSwitcher(parent=self)
+        self.task_switcher.window_selected.connect(self._on_switcher_window_selected)
+
+        self.overview_mode = OverviewMode(parent=self)
+        self.overview_mode.window_selected.connect(self._on_overview_window_selected)
+
+    def _on_workspace_changed(self, workspace_index: int):
+        """Handle workspace switch - show/hide windows accordingly."""
+        for app_id, window in self.open_windows.items():
+            if self.workspace_manager.is_window_visible(app_id):
+                if not window._is_minimized:
+                    window.show()
+            else:
+                window.hide()
+        # Update dock workspace indicator if available
+        if hasattr(self.dock, 'set_workspace_index'):
+            self.dock.set_workspace_index(workspace_index)
+
+    def _on_switcher_window_selected(self, app_id: str):
+        """Handle window selection from Alt+Tab switcher."""
+        if app_id in self.open_windows:
+            window = self.open_windows[app_id]
+            if window._is_minimized:
+                window.restore_minimized()
+            self._on_window_focused(window)
+
+    def _on_overview_window_selected(self, app_id: str):
+        """Handle window selection from overview mode."""
+        if app_id in self.open_windows:
+            window = self.open_windows[app_id]
+            if window._is_minimized:
+                window.restore_minimized()
+            self._on_window_focused(window)
+
+    def show_task_switcher(self):
+        """Show the Alt+Tab task switcher."""
+        self.task_switcher.show_switcher(self.open_windows)
+
+    def show_overview(self):
+        """Show the overview mode."""
+        self.overview_mode.show_overview(
+            self.open_windows,
+            self.workspace_manager.workspace_count,
+            self.workspace_manager.current_workspace,
+        )
+
+    def switch_workspace(self, index: int):
+        """Switch to a specific workspace."""
+        self.workspace_manager.set_current_workspace(index)
+
+    def next_workspace(self):
+        """Switch to the next workspace."""
+        self.workspace_manager.next_workspace()
+
+    def previous_workspace(self):
+        """Switch to the previous workspace."""
+        self.workspace_manager.previous_workspace()
 
     def _load_wallpaper(self):
         """Load the default or user-configured wallpaper."""

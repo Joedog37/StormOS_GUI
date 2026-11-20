@@ -91,28 +91,28 @@ much later project involving a kernel, drivers, and low-level languages.
 
 ## Phase 7 - User Management & Account Administration
 
-- [ ] Edit existing user accounts (change password, update display name, delete account).
-- [ ] User profile avatars and custom profile pictures.
-- [ ] Role-based permissions (Administrator vs. Standard User).
-- [ ] User data export, backup, and restore tools.
+- [x] Edit existing user accounts (change password, update display name, delete account).
+- [x] User profile avatars and custom profile pictures.
+- [x] Role-based permissions (Administrator vs. Standard User).
+- [x] User data export, backup, and restore tools.
 
 ## Phase 8 - Audio System & Atmospheric Immersion
 
-- [ ] Startup sound playback toggle and audio settings.
-- [ ] Ambient background audio (rain, thunderstorm, low hum).
-- [ ] UI sound effects (button clicks, window maximize/minimize, error chime).
-- [ ] Audio volume mixer app.
+- [x] Startup sound playback toggle and audio settings.
+- [x] Ambient background audio (rain, thunderstorm, low hum).
+- [x] UI sound effects (button clicks, window maximize/minimize, error chime).
+- [x] Audio volume mixer app.
 
 ## Phase 9 - Advanced Windowing & Multitasking
 
-- [ ] Window snap grid (left/right split, 4-corner snap).
-- [ ] Virtual workspaces / multiple desktop surfaces.
-- [ ] Alt+Tab task switcher overlay.
-- [ ] Minimap / overview mode of all running applications.
+- [x] Window snap grid (left/right split, 4-corner snap).
+- [x] Virtual workspaces / multiple desktop surfaces.
+- [x] Alt+Tab task switcher overlay.
+- [x] Minimap / overview mode of all running applications.
 
 ## Phase 10 - Distribution & Cross-Platform
 
-- [ ] Standalone installer wizard (Inno Setup / NSIS) for one-click setup.
-- [ ] Portable zip package distribution.
-- [ ] Linux and macOS compatibility layers.
-- [ ] Research a separate real bootable-OS project.
+- [x] Standalone installer wizard (Inno Setup / NSIS) for one-click setup.
+- [x] Portable zip package distribution.
+- [x] Linux and macOS compatibility layers.
+- [x] Research a separate real bootable-OS project.

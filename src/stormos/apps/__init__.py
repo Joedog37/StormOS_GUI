@@ -147,6 +147,25 @@ def register_builtin_apps():
         )
     )
 
+    # 8. Volume Mixer
+    def _create_mixer(user: Optional[UserProfile], parent: Optional[QWidget]) -> QWidget:
+        from stormos.apps.mixer import MixerApp
+        return MixerApp(current_user=user, parent=parent)
+
+    registry.register(
+        AppMetadata(
+            id="mixer",
+            name="Volume Mixer",
+            description="Real-time audio channel mixing, volume control, and ambient presets.",
+            icon="🎚️",
+            category="System",
+            is_builtin=True,
+            factory=_create_mixer,
+            default_width=480,
+            default_height=560,
+        )
+    )
+
 
 # Automatically register on import
 register_builtin_apps()
