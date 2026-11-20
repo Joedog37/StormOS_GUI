@@ -5,6 +5,7 @@ the floating Storm Dock (Taskbar), and the Command Center (Start Menu).
 """
 
 from datetime import datetime
+from typing import Optional
 from PySide6.QtCore import QDateTime, QPoint, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QMouseEvent, QPainter, QPixmap
 from PySide6.QtWidgets import (
