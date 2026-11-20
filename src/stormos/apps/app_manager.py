@@ -38,6 +38,7 @@ from stormos.core.constants import (
     COLOR_WARNING,
 )
 from stormos.services.app_installer import AppInstallerService
+from stormos.services.linux_program_loader import LinuxProgramLoader
 from stormos.services.user_manager import UserProfile
 
 
@@ -82,9 +83,11 @@ class AppManagerApp(QWidget):
         super().__init__(parent)
         self.current_user = current_user
         self.installer_service = AppInstallerService()
+        self.linux_loader = LinuxProgramLoader.get_instance()
         self.selected_app_id: Optional[str] = None
         self._setup_ui()
         self.refresh_app_list()
+        self.refresh_linux_programs()
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -206,6 +209,52 @@ class AppManagerApp(QWidget):
             l_layout.addWidget(btn_sample)
 
         splitter.addWidget(list_frame)
+
+        # Middle: Linux Programs section
+        linux_frame = QFrame()
+        linux_frame.setStyleSheet(
+            f"background-color: {COLOR_STORM_CLOUD}; border: 1px solid {COLOR_PANEL_EDGE}; border-radius: 8px; padding: 8px;"
+        )
+        linux_layout = QVBoxLayout(linux_frame)
+        linux_layout.setContentsMargins(4, 4, 4, 4)
+        linux_layout.setSpacing(6)
+
+        lbl_linux = QLabel("🐧 Linux Programs")
+        lbl_linux.setStyleSheet(f"font-weight: bold; color: {COLOR_MIST_BLUE}; font-size: 11px; border: none;")
+        linux_layout.addWidget(lbl_linux)
+
+        self.linux_program_list = QListWidget()
+        self.linux_program_list.setStyleSheet(
+            f"""
+            QListWidget {{
+                background: transparent;
+                border: none;
+                color: {COLOR_TEXT_MAIN};
+            }}
+            QListWidget::item {{
+                background-color: {COLOR_RAISED_PANEL};
+                border: 1px solid {COLOR_PANEL_EDGE};
+                border-radius: 6px;
+                padding: 8px;
+                margin-bottom: 4px;
+            }}
+            QListWidget::item:selected {{
+                background-color: rgba(56, 201, 255, 0.2);
+                border-color: {COLOR_LIGHTNING};
+                color: {COLOR_LIGHTNING};
+            }}
+            """
+        )
+        self.linux_program_list.currentRowChanged.connect(self._on_linux_program_selected)
+        linux_layout.addWidget(self.linux_program_list)
+
+        self.btn_refresh_linux = QPushButton("🔄 Refresh Linux Programs")
+        self.btn_refresh_linux.setStyleSheet(btn_style)
+        self.btn_refresh_linux.clicked.connect(self.refresh_linux_programs)
+        linux_layout.addWidget(self.btn_refresh_linux)
+
+        linux_layout.addStretch()
+        splitter.addWidget(linux_frame)
 
         # Right: App Details & Actions
         details_frame = QFrame()
@@ -377,3 +426,71 @@ class AppManagerApp(QWidget):
             self.refresh_app_list()
         else:
             QMessageBox.warning(self, "Error", msg)
+
+    # --- Linux Programs ---
+
+    def refresh_linux_programs(self):
+        """Refresh the list of detected Linux programs."""
+        self.linux_program_list.clear()
+
+        if not self.linux_loader.is_available():
+            item = QListWidgetItem("⚠️ Linux programs only available on Linux systems")
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            self.linux_program_list.addItem(item)
+            return
+
+        programs = self.linux_loader.get_program_list()
+        for prog in programs:
+            icon = prog.get("icon", "📦")
+            # Use emoji if icon is a file path
+            if icon and not icon.startswith(("🔤", "😀", "🎵", "🎮", "📁", "⚙️", "🌐", "💻", "📚", "🎨", "📝", "🔧")):
+                icon = "📦"
+            name = prog.get("name", "Unknown")
+            item = QListWidgetItem(f"{icon}  {name}")
+            item.setData(Qt.ItemDataRole.UserRole, prog.get("id", ""))
+            self.linux_program_list.addItem(item)
+
+        if self.linux_program_list.count() > 0:
+            self.linux_program_list.setCurrentRow(0)
+
+    def _on_linux_program_selected(self, row: int):
+        """Handle selection of a Linux program."""
+        if row < 0:
+            return
+        item = self.linux_program_list.item(row)
+        if not item:
+            return
+        app_id = item.data(Qt.ItemDataRole.UserRole)
+        self.selected_app_id = app_id
+
+        # Get program info
+        programs = self.linux_loader.get_program_list()
+        prog = next((p for p in programs if p.get("id") == app_id), None)
+        if prog is None:
+            return
+
+        icon = prog.get("icon", "📦")
+        if icon and not icon.startswith(("🔤", "😀", "🎵", "🎮", "📁", "⚙️", "🌐", "💻", "📚", "🎨", "📝", "🔧")):
+            icon = "📦"
+        name = prog.get("name", "Unknown")
+        comment = prog.get("comment", "No description available.")
+        categories = prog.get("categories", [])
+        exec_cmd = prog.get("exec", "")
+
+        self.detail_icon_title.setText(f"{icon}  {name}")
+        self.detail_meta.setText(
+            f"Identifier: {app_id} • Category: {', '.join(categories) if categories else 'Utilities'} • Type: Linux Program"
+        )
+        self.detail_desc.setPlainText(f"{comment}\n\nExec: {exec_cmd}")
+
+        # Disable uninstall for Linux programs
+        self.btn_uninstall.setEnabled(False)
+        self.btn_uninstall.setVisible(False)
+
+    def _launch_linux_program(self):
+        """Launch the selected Linux program."""
+        if not self.selected_app_id:
+            return
+        success = self.linux_loader.launch_program(self.selected_app_id.replace("linux.", ""))
+        if not success:
+            QMessageBox.warning(self, "Launch Failed", "Could not launch the program.")
